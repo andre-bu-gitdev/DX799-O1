@@ -1,0 +1,10 @@
+numpy
+pandas==2.3.3
+matplotlib
+scikit-learn
+kagglehub
+seaborn
+tqdm
+requests
+optuna
+xgboost
