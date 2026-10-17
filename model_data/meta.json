@@ -1,0 +1,63 @@
+{
+  "target": "co_other_cons",
+  "train_end": "2014-12-31",
+  "test_start": "2015-01-01",
+  "features": [
+    "emp_constr",
+    "unemp_rate_long",
+    "inv_mfg_trade",
+    "emp_info",
+    "gov_debt_gdp",
+    "stk_vix",
+    "hours_mfg",
+    "credit_cons_total",
+    "sent_consumer",
+    "emp_pt_econ",
+    "house_cs10"
+  ],
+  "lags": {
+    "emp_constr": [
+      1,
+      2
+    ],
+    "unemp_rate_long": [
+      1
+    ],
+    "inv_mfg_trade": [
+      1
+    ],
+    "emp_info": [
+      1,
+      2
+    ],
+    "gov_debt_gdp": [
+      1
+    ],
+    "stk_vix": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "hours_mfg": [
+      1,
+      2
+    ],
+    "credit_cons_total": [
+      1
+    ],
+    "sent_consumer": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "emp_pt_econ": [
+      1,
+      2
+    ],
+    "house_cs10": [
+      1
+    ]
+  }
+}
