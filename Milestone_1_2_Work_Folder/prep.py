@@ -61,7 +61,7 @@ from sklearn.model_selection import (GridSearchCV, RandomizedSearchCV,
 from sklearn.pipeline import make_pipeline  # re-exported for notebooks
 from sklearn.preprocessing import StandardScaler
 
-DATA_DIR = "model_data"
+DATA_DIR = "/workspaces/DX799-O1/model_data"
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
 COVID = ("2020-01-01", "2021-12-31")
 
