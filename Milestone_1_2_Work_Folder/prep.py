@@ -40,6 +40,7 @@ CONTENTS
   Tuning          tune, tuning_table, plot_tuning, plot_tuning_heatmap
   Scoring         score, score_classifier, plot_forecast, walk_forward
   Comparison      record, load_results, compare, plot_forecasts
+  Export (Excel)  export_predictions, export_recorded
 """
 
 import glob
@@ -61,15 +62,17 @@ from sklearn.model_selection import (GridSearchCV, RandomizedSearchCV,
 from sklearn.pipeline import make_pipeline  # re-exported for notebooks
 from sklearn.preprocessing import StandardScaler
 
-DATA_DIR = "/workspaces/DX799-O1/model_data"
+DATA_DIR = "/workspaces/DX799-O1/model_data"     # <- your path
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
+EXPORT_DIR = os.path.join(DATA_DIR, "exports")
 COVID = ("2020-01-01", "2021-12-31")
 
 __all__ = ["np", "pd", "plt", "make_pipeline", "TimeSeriesSplit",
            "load_model_data", "load_full", "make_binary_target", "preprocess",
            "tune", "tuning_table", "plot_tuning", "plot_tuning_heatmap",
            "score", "score_classifier", "plot_forecast", "walk_forward",
-           "record", "load_results", "compare", "plot_forecasts"]
+           "record", "load_results", "compare", "plot_forecasts",
+           "export_predictions", "export_recorded"]
 
 
 # =============================================================================
@@ -536,3 +539,61 @@ def plot_forecasts(names=None, start=None, results=None, folder=RESULTS_DIR, ax=
     ax.grid(alpha=0.3)
     ax.legend(fontsize=8, loc="upper left")
     return ax
+
+
+# =============================================================================
+# EXPORT TO CSV (open in Excel)
+# =============================================================================
+def export_predictions(model, X_train, X_test, y_train, y_test, name="model",
+                       include_features=False, target_lag_col=None, folder=EXPORT_DIR):
+    """
+    One CSV, one row per quarter: date, set (train/test), actual, predicted, error,
+    abs error, naive forecast. include_features=True adds every X column too.
+    Works for regressors and classifiers (binary y). Returns the DataFrame.
+    """
+    os.makedirs(folder, exist_ok=True)
+    parts = []
+    for label, X, y in [("train", X_train, y_train), ("test", X_test, y_test)]:
+        d = pd.DataFrame({"set": label, "actual": y, "predicted": _pred(model, X)}, index=X.index)
+        d["error (pred - actual)"] = d["predicted"] - d["actual"]
+        d["abs error"] = d["error (pred - actual)"].abs()
+        lag = target_lag_col or f"{y.name}_L1"
+        if not is_classifier(model) and lag in X.columns:
+            d["naive (last quarter)"] = X[lag]
+        if include_features:
+            d = d.join(X)
+        parts.append(d)
+    out = pd.concat(parts)
+    out.index.name = "date"
+    path = os.path.join(folder, f"{_slug(name)}_predictions.csv")
+    out.to_csv(path)
+    print(f"saved {len(out)} rows -> {path}")
+    return out
+
+
+def export_recorded(names=None, folder=RESULTS_DIR, out_folder=EXPORT_DIR):
+    """
+    Everything you recorded, side by side, in two CSVs:
+      all_models_test_predictions.csv : date, actual, naive, one column per model (test period)
+      all_models_metrics.csv          : the compare() table
+    """
+    os.makedirs(out_folder, exist_ok=True)
+    results = load_results(folder)
+    if names:
+        results = {k: v for k, v in results.items() if k in names}
+    regs = {k: v for k, v in results.items() if v["type"] == "regressor"}
+    if regs:
+        first = next(iter(regs.values()))
+        wide = pd.DataFrame({"actual": first["actual_test"], "naive (last quarter)": first["naive_test"]})
+        for k, v in regs.items():
+            wide[k] = v["pred_test"]
+        wide.index.name = "date"
+        p1 = os.path.join(out_folder, "all_models_test_predictions.csv")
+        wide.to_csv(p1)
+        print(f"saved -> {p1}")
+    table = compare(results=results, plot=False)
+    if table is not None:
+        p2 = os.path.join(out_folder, "all_models_metrics.csv")
+        table.to_csv(p2)
+        print(f"saved -> {p2}")
+    return table
