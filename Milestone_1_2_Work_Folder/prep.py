@@ -71,7 +71,7 @@ RESULTS_DIR = os.path.join(DATA_DIR, "results")
 EXPORT_DIR = os.path.join(DATA_DIR, "exports")
 COVID = ("2020-01-01", "2021-12-31")
 
-__all__ = ["np", "pd", "plt", "make_pipeline", "TimeSeriesSplit",
+__all__ = ["np", "pd", "plt", "make_pipeline", "TimeSeriesSplit", "DATA_DIR", "RESULTS_DIR", "EXPORT_DIR",
            "load_model_data", "load_full", "make_binary_target", "preprocess",
            "tune", "tuning_table", "plot_tuning", "plot_tuning_heatmap",
            "score", "score_classifier", "plot_forecast", "walk_forward",
