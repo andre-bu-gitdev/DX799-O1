@@ -41,6 +41,10 @@ CONTENTS
   Scoring         score, score_classifier, plot_forecast, walk_forward
   Comparison      record, load_results, compare, plot_forecasts
   Export (Excel)  export_predictions, export_recorded
+  Explain         feature_weights, plot_feature_weights      what the fitted model put on each feature
+                  weight_path, plot_weight_path              how weights change with a hyperparameter (e.g. Lasso alpha)
+                  permutation_table, plot_permutation        model-agnostic importance, train vs test (overfit check)
+                  weight_stability, plot_weight_stability    do weights hold up across time folds? (overfit check)
 """
 
 import glob
@@ -72,7 +76,9 @@ __all__ = ["np", "pd", "plt", "make_pipeline", "TimeSeriesSplit",
            "tune", "tuning_table", "plot_tuning", "plot_tuning_heatmap",
            "score", "score_classifier", "plot_forecast", "walk_forward",
            "record", "load_results", "compare", "plot_forecasts",
-           "export_predictions", "export_recorded"]
+           "export_predictions", "export_recorded",
+           "feature_weights", "plot_feature_weights", "weight_path", "plot_weight_path",
+           "permutation_table", "plot_permutation", "weight_stability", "plot_weight_stability"]
 
 
 # =============================================================================
@@ -597,3 +603,225 @@ def export_recorded(names=None, folder=RESULTS_DIR, out_folder=EXPORT_DIR):
         table.to_csv(p2)
         print(f"saved -> {p2}")
     return table
+
+
+# =============================================================================
+# EXPLAIN: HOW EACH MODEL TREATS EACH FEATURE
+# =============================================================================
+import re
+from sklearn.inspection import permutation_importance
+from sklearn.pipeline import Pipeline
+
+
+def _base_var(name):
+    """'unemp_rate_L3' -> 'unemp_rate' (interaction terms like 'a_L1 b_L2' are left as-is)."""
+    return name if " " in name else re.sub(r"_L\d+$", "", name)
+
+
+def _final_and_names(model, X):
+    """Final estimator + the feature names it actually sees (after selection / polynomial terms)."""
+    if isinstance(model, Pipeline):
+        final = model[-1]
+        if len(model.steps) > 1:
+            try:
+                names = list(model[:-1].get_feature_names_out())
+            except Exception:
+                names = [f"f{i}" for i in range(np.ravel(getattr(final, "coef_", getattr(final, "feature_importances_", []))).size)]
+        else:
+            names = list(X.columns)
+        return final, names
+    return model, list(X.columns)
+
+
+def feature_weights(model, X, by_variable=False):
+    """
+    What a FITTED model put on each feature.
+      Linear models (Lasso, Ridge, ElasticNet, LinearRegression, Logistic, linear SVR/SVC, PLS):
+          coefficient = change in the prediction per 1 sd of the feature (when the Pipeline scales).
+          0 = feature dropped (Lasso / Elastic Net / selection).
+      PCR (PCA -> linear): coefficients mapped back to the original features.
+      Trees / random forests: impurity-based importance (always >= 0, sums to 1; no direction).
+      Models with neither (e.g. rbf/poly-kernel SVR): use permutation_table() instead.
+    by_variable=True adds up |weights| across lags (unemp_rate_L1..L4 -> unemp_rate).
+    """
+    final, names = _final_and_names(model, X)
+    kind = None
+    if hasattr(final, "coef_"):
+        w = np.ravel(final.coef_)
+        kind = "coefficient"
+        steps = dict(model.named_steps) if isinstance(model, Pipeline) else {}
+        pca = next((v for v in steps.values() if v.__class__.__name__ == "PCA"), None)
+        if pca is not None and len(w) == pca.n_components_:        # PCR: back to original features
+            w = pca.components_.T @ w
+            names = list(X.columns)
+            kind = "coefficient (PCR, mapped to features)"
+    elif hasattr(final, "feature_importances_"):
+        w = np.ravel(final.feature_importances_)
+        kind = "importance"
+    else:
+        raise TypeError(f"{final.__class__.__name__} has no coef_ or feature_importances_ "
+                        "(e.g. rbf/poly-kernel SVM) - use permutation_table(model, ...) instead")
+    if len(names) != len(w):
+        names = [f"f{i}" for i in range(len(w))]
+    t = pd.DataFrame({"feature": names, "weight": w})
+    # features removed by selection (SequentialFeatureSelector) appear with weight 0
+    if kind == "coefficient" and set(names) <= set(X.columns) and len(names) < X.shape[1]:
+        t = pd.DataFrame({"feature": X.columns}).merge(t, how="left").fillna({"weight": 0.0})
+    t["abs weight"] = t["weight"].abs()
+    t["used"] = t["abs weight"] > 1e-12
+    t["variable"] = t["feature"].map(_base_var)
+    t.attrs["kind"] = kind
+    if by_variable:
+        g = t.groupby("variable").agg(**{"total abs weight": ("abs weight", "sum"),
+                                         "lags used": ("used", "sum"),
+                                         "lags available": ("used", "size")})
+        return g.sort_values("total abs weight", ascending=False)
+    return t.sort_values("abs weight", ascending=False).reset_index(drop=True)
+
+
+def plot_feature_weights(model, X, top=20, by_variable=False, ax=None, title=None):
+    """Bar chart of feature_weights(). Red = pushes forecast up, blue = down, grey = dropped."""
+    t = feature_weights(model, X, by_variable=by_variable)
+    kind = "total |weight| across lags" if by_variable else t.attrs.get("kind", "weight")
+    if by_variable:
+        vals, labels, colors = t["total abs weight"].head(top), t.index[:top], "tab:purple"
+    else:
+        h = t.head(top)
+        vals, labels = h["weight"], h["feature"]
+        colors = ["lightgrey" if not u else ("tab:red" if v > 0 else "tab:blue") for v, u in zip(h["weight"], h["used"])]
+    n = len(vals)
+    ax = ax or plt.subplots(figsize=(8, 0.32 * n + 1.2))[1]
+    ax.barh(list(labels)[::-1], list(vals)[::-1], color=colors[::-1] if isinstance(colors, list) else colors)
+    ax.axvline(0, color="black", lw=0.8)
+    if not by_variable and "used" in t:
+        dropped = int((~t["used"]).sum())
+        if dropped:
+            ax.text(0.99, 0.01, f"{dropped} of {len(t)} features set to 0", transform=ax.transAxes,
+                    ha="right", va="bottom", fontsize=8, color="grey")
+    ax.set_title(title or f"Feature weights ({kind})")
+    ax.grid(axis="x", alpha=0.3)
+    return ax
+
+
+def weight_path(estimator, param, values, X, y):
+    """
+    Refit the model at each value of one hyperparameter and record every feature's weight.
+    e.g. weight_path(pipe, "lasso__alpha", np.logspace(-4, 0, 40), X_train, y_train)
+    Returns a DataFrame: rows = parameter values, columns = features.
+    """
+    rows = {}
+    for v in values:
+        m = clone(estimator).set_params(**{param: v}).fit(X, y)
+        t = feature_weights(m, X)
+        rows[v] = t.set_index("feature")["weight"]
+    out = pd.DataFrame(rows).T
+    out.index.name = param
+    return out
+
+
+def plot_weight_path(path, best=None, top=10, logx=True, ax=None):
+    """
+    One line per feature across the hyperparameter (e.g. Lasso alpha): watch weights shrink
+    and hit 0. The `top` features (largest weight anywhere on the path) are labelled; the rest grey.
+    Also shows how many features are still in use at each value.
+    """
+    ax = ax or plt.subplots(figsize=(11, 5))[1]
+    order = path.abs().max().sort_values(ascending=False).index
+    for f in order[top:]:
+        ax.plot(path.index, path[f], color="lightgrey", lw=0.8)
+    for f in order[:top]:
+        ax.plot(path.index, path[f], lw=1.6, label=f)
+    if best is not None:
+        ax.axvline(best, color="black", ls=":", label=f"chosen = {best:.3g}")
+    ax.axhline(0, color="black", lw=0.6)
+    if logx:
+        ax.set_xscale("log")
+    ax.set_xlabel(path.index.name)
+    ax.set_ylabel("weight (per 1 sd of feature)")
+    ax.set_title("How each feature's weight changes with the hyperparameter")
+    ax.grid(alpha=0.3)
+    ax.legend(fontsize=7, loc="center left", bbox_to_anchor=(1.10, 0.5))
+    ax2 = ax.twinx()
+    ax2.plot(path.index, (path.abs() > 1e-12).sum(axis=1), color="black", lw=1, ls="--", alpha=0.5)
+    ax2.set_ylabel("features in use (dashed)")
+    return ax
+
+
+def permutation_table(model, X_train, y_train, X_test, y_test, n_repeats=30, scoring=None, random_state=0):
+    """
+    Works for ANY fitted model (incl. rbf SVM, random forests, polynomial pipelines).
+    Shuffles one feature at a time and measures how much the score gets worse.
+    Done on train AND test: a feature that matters on train but not on test is a sign
+    the model learned noise from it (overfitting).
+    """
+    if scoring is None:
+        scoring = "accuracy" if is_classifier(model) else "neg_root_mean_squared_error"
+    res = {}
+    for label, X, y in [("train", X_train, y_train), ("test", X_test, y_test)]:
+        r = permutation_importance(model, X, y, n_repeats=n_repeats, scoring=scoring,
+                                   random_state=random_state, n_jobs=-1)
+        res[f"{label} importance"] = r.importances_mean
+        res[f"{label} sd"] = r.importances_std
+    t = pd.DataFrame(res, index=X_train.columns)
+    t["train - test"] = t["train importance"] - t["test importance"]
+    t.attrs["scoring"] = scoring
+    return t.sort_values("test importance", ascending=False)
+
+
+def plot_permutation(table, top=20, ax=None):
+    """Train vs test permutation importance side by side."""
+    t = table.head(top)
+    ax = ax or plt.subplots(figsize=(8, 0.35 * len(t) + 1.2))[1]
+    y = np.arange(len(t))[::-1]
+    ax.barh(y + 0.2, t["train importance"], height=0.4, xerr=t["train sd"], label="train", color="tab:blue", alpha=0.7)
+    ax.barh(y - 0.2, t["test importance"], height=0.4, xerr=t["test sd"], label="test", color="tab:orange")
+    ax.set_yticks(y, t.index)
+    ax.axvline(0, color="black", lw=0.8)
+    ax.set_xlabel(f"drop in {table.attrs.get('scoring', 'score').replace('neg_', '')} when shuffled")
+    ax.set_title("Permutation importance (big train, small test = likely overfit)")
+    ax.legend(fontsize=8)
+    ax.grid(axis="x", alpha=0.3)
+    return ax
+
+
+def weight_stability(estimator, X, y, n_splits=5):
+    """
+    Refit the model on each expanding time fold (TimeSeriesSplit) and compare the weights.
+    Returns (weights by fold, summary). Summary columns:
+      mean, sd, share of folds used, sign flips (weight changes sign across folds).
+    Unstable or sign-flipping weights = the model is fitting noise for that feature.
+    """
+    rows = {}
+    for i, (tr, _) in enumerate(TimeSeriesSplit(n_splits=n_splits).split(X)):
+        m = clone(estimator).fit(X.iloc[tr], y.iloc[tr])
+        end = X.index[tr[-1]]
+        rows[f"fold {i + 1} (to {end.date() if hasattr(end, 'date') else end})"] = \
+            feature_weights(m, X.iloc[tr]).set_index("feature")["weight"]
+    m = clone(estimator).fit(X, y)
+    rows["full training"] = feature_weights(m, X).set_index("feature")["weight"]
+    W = pd.DataFrame(rows).T
+    folds = W.iloc[:-1]
+    signs = np.sign(folds.where(folds.abs() > 1e-12))
+    summary = pd.DataFrame({
+        "full-training weight": W.iloc[-1],
+        "mean across folds": folds.mean(),
+        "sd across folds": folds.std(),
+        "share of folds used": (folds.abs() > 1e-12).mean(),
+        "sign flips": (signs.nunique() > 1),
+    }).sort_values("full-training weight", key=abs, ascending=False)
+    return W, summary
+
+
+def plot_weight_stability(W, top=15, ax=None):
+    """Weights per fold for the largest features: tight dots = stable, spread/crossing 0 = unstable."""
+    order = W.iloc[-1].abs().sort_values(ascending=False).index[:top]
+    ax = ax or plt.subplots(figsize=(9, 0.35 * len(order) + 1.2))[1]
+    folds = W.iloc[:-1]
+    for i, f in enumerate(order[::-1]):
+        ax.scatter(folds[f], [i] * len(folds), color="tab:blue", alpha=0.6, s=18)
+        ax.scatter(W.iloc[-1][f], i, color="black", marker="|", s=200)
+    ax.set_yticks(range(len(order)), order[::-1])
+    ax.axvline(0, color="black", lw=0.8)
+    ax.set_title("Weight stability across time folds (dots = folds, bar = full training)")
+    ax.grid(axis="x", alpha=0.3)
+    return ax
