@@ -13,7 +13,8 @@
     "credit_cons_total",
     "sent_consumer",
     "emp_pt_econ",
-    "house_cs10"
+    "house_cs10",
+    "dq_other_cons"
   ],
   "lags": {
     "emp_constr": [
@@ -58,6 +59,11 @@
     ],
     "house_cs10": [
       1
+    ],
+    "dq_other_cons": [
+      1,
+      2,
+      3
     ]
   }
 }
