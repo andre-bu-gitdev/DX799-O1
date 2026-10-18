@@ -1,0 +1,19 @@
+,type,test RMSE,test MAE,test R2,test DirAcc,test RMSE excl. 2020-21,train RMSE,overfit gap (test - train RMSE),CV score,CV metric,best params,saved,Accuracy (vs threshold),test ROC_AUC
+Forward selection,regressor,0.089,0.065,0.878,0.659,0.084,0.192,-0.10300000000000001,0.22665994088661962,root_mean_squared_error,{'sequentialfeatureselector__n_features_to_select': 2},2026-10-18 03:17,,
+Backward selection,regressor,0.103,0.063,0.836,0.636,0.081,0.21,-0.107,0.23581802459851606,root_mean_squared_error,{'sequentialfeatureselector__n_features_to_select': 1},2026-10-18 03:17,,
+Naive (last quarter),baseline,0.104,0.066,0.832,,0.089,,,,,,,,
+Elastic Net,regressor,0.207,0.114,0.34,0.636,0.097,0.174,0.033,0.3367559267561917,root_mean_squared_error,"{'elasticnet__alpha': np.float64(0.019573417814876617), 'elasticnet__l1_ratio': 1.0}",2026-10-18 02:11,,
+Lasso,regressor,0.207,0.114,0.339,0.636,0.097,0.174,0.033,0.33635187685328316,root_mean_squared_error,{'lasso__alpha': np.float64(0.020309176209047347)},2026-10-18 02:06,,
+Random forest,regressor,0.216,0.125,0.278,0.545,0.115,0.087,0.129,0.46238872531878294,root_mean_squared_error,"{'randomforestregressor__n_estimators': 200, 'randomforestregressor__min_samples_leaf': 1, 'randomforestregressor__max_features': 1.0, 'randomforestregressor__max_depth': 8}",2026-10-18 05:12,,
+Targeted terms + Ridge,regressor,0.268,0.139,-0.109,0.614,0.099,0.18,0.08800000000000002,0.35310723762817287,root_mean_squared_error,"{'addterms__pairs': (('dq_other_cons_L1', 'unemp_rate_long_L1'), ('dq_other_cons_L1', 'house_cs10_L1'), ('co_credit_card_L1', 'unemp_rate_long_L1'), ('sent_consumer_L1', 'unemp_rate_long_L1')), 'addterms__squares': (), 'ridge__alpha': np.float64(23.71373705661655)}",2026-10-18 01:43,,
+Poly + Ridge,regressor,0.361,0.157,-1.014,0.636,0.122,0.195,0.16599999999999998,0.38412021764838067,root_mean_squared_error,"{'polynomialfeatures__degree': 1, 'polynomialfeatures__interaction_only': False, 'ridge__alpha': np.float64(23.95026619987486)}",2026-10-18 01:10,,
+Decision tree,regressor,0.368,0.178,-1.094,0.5,0.164,0.184,0.184,0.4647885939426296,root_mean_squared_error,"{'decisiontreeregressor__max_depth': 4, 'decisiontreeregressor__min_samples_leaf': 8}",2026-10-18 05:06,,
+Ridge,regressor,0.372,0.169,-1.138,0.614,0.127,0.202,0.16999999999999998,0.3841484697709364,root_mean_squared_error,{'ridge__alpha': np.float64(32.57020655659783)},2026-10-18 02:00,,
+Linear (no extra terms),regressor,0.387,0.179,-1.307,0.591,0.132,0.161,0.226,,,,2026-10-18 01:10,,
+SVR (kernel),regressor,0.42,0.179,-1.727,0.432,0.117,0.179,0.241,0.30704647278883473,root_mean_squared_error,"{'svr__C': np.float64(1000.0), 'svr__epsilon': np.float64(0.0), 'svr__kernel': 'linear'}",2026-10-18 04:39,,
+SVR (linear),regressor,0.42,0.179,-1.727,0.432,0.117,0.179,0.241,0.30704647278883473,root_mean_squared_error,"{'svr__C': np.float64(1000.0), 'svr__epsilon': np.float64(0.0)}",2026-10-18 04:28,,
+PLSR,regressor,0.453,0.2,-2.168,0.614,0.139,0.237,0.21600000000000003,0.38920858656968704,root_mean_squared_error,{'plsregression__n_components': 2},2026-10-18 03:22,,
+PCR,regressor,0.46,0.242,-2.273,0.591,0.206,0.258,0.202,0.36441968133568825,root_mean_squared_error,{'pca__n_components': 4},2026-10-18 03:19,,
+Logistic,classifier,,,,,,,,0.6041666666666667,accuracy,"{'logisticregression__C': np.float64(0.23357214690901212), 'logisticregression__l1_ratio': 1.0}",2026-10-18 03:57,0.932,0.952
+Random forest (classifier),classifier,,,,,,,,0.7500000000000001,accuracy,"{'randomforestclassifier__n_estimators': 300, 'randomforestclassifier__min_samples_leaf': 8, 'randomforestclassifier__max_features': 0.5, 'randomforestclassifier__max_depth': 2}",2026-10-18 05:13,0.977,1.0
+SVC,classifier,,,,,,,,0.625,accuracy,"{'svc__C': np.float64(1.0), 'svc__gamma': np.float64(0.1), 'svc__kernel': 'rbf'}",2026-10-18 04:40,0.432,
