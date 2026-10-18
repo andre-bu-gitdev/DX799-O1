@@ -1,0 +1,5 @@
+,CV accuracy,CV ROC AUC,test accuracy,iterations to converge,largest |coef|,smallest |coef|
+no scaling,0.562,0.514,0.795,648.0,2.904,0.0
+StandardScaler,0.521,0.668,0.864,17.0,1.933,0.083
+MinMaxScaler,0.521,0.468,0.909,16.0,1.865,0.011
+RobustScaler,0.542,0.693,0.864,14.0,2.021,0.02
