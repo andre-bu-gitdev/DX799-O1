@@ -784,15 +784,16 @@ def plot_permutation(table, top=20, ax=None):
     return ax
 
 
-def weight_stability(estimator, X, y, n_splits=5):
+def weight_stability(estimator, X, y, n_splits=5, cv=None):
     """
     Refit the model on each expanding time fold (TimeSeriesSplit) and compare the weights.
     Returns (weights by fold, summary). Summary columns:
       mean, sd, share of folds used, sign flips (weight changes sign across folds).
     Unstable or sign-flipping weights = the model is fitting noise for that feature.
+    cv : optional splitter (e.g. the same TimeSeriesSplit passed to tune()); default TimeSeriesSplit(n_splits)
     """
     rows = {}
-    for i, (tr, _) in enumerate(TimeSeriesSplit(n_splits=n_splits).split(X)):
+    for i, (tr, _) in enumerate((cv or TimeSeriesSplit(n_splits=n_splits)).split(X)):
         m = clone(estimator).fit(X.iloc[tr], y.iloc[tr])
         end = X.index[tr[-1]]
         rows[f"fold {i + 1} (to {end.date() if hasattr(end, 'date') else end})"] = \
