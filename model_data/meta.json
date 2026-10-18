@@ -14,7 +14,8 @@
     "sent_consumer",
     "emp_pt_econ",
     "house_cs10",
-    "dq_other_cons"
+    "dq_other_cons",
+    "co_credit_card"
   ],
   "lags": {
     "emp_constr": [
@@ -64,6 +65,10 @@
       1,
       2,
       3
+    ],
+    "co_credit_card": [
+      1,
+      2
     ]
   }
 }
